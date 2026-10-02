@@ -87,36 +87,75 @@
     return { groups, uncategorized };
   }
 
-  function logGroups(tagCount, { groups, uncategorized }) {
-    const lines = [];
-    for (const group of groups) {
-      lines.push(`${group.parent.name} (${group.children.length})`);
-      for (const child of group.children) {
-        lines.push(`  - ${child.name}`);
-      }
-    }
-    if (uncategorized.length) {
-      lines.push(`Sonstige (${uncategorized.length})`);
-      for (const tag of uncategorized) {
-        lines.push(`  - ${tag.name}`);
-      }
-    }
-    console.log(
-      `${LOG_PREFIX} ${tagCount} Tags, ${groups.length} Gruppen, ${uncategorized.length} ohne Gruppe\n` +
-        lines.join("\n")
+  const { React } = PluginApi;
+  const h = React.createElement;
+
+  function GroupList({ title, tags }) {
+    return h(
+      "section",
+      { className: "gtv-group" },
+      h("h3", null, `${title} (${tags.length})`),
+      h(
+        "ul",
+        null,
+        tags.map((tag) => h("li", { key: tag.id }, tag.name))
+      )
     );
   }
 
-  async function init() {
-    console.log(LOG_PREFIX, "loaded");
-    try {
-      const tags = await fetchTags();
-      const byId = buildTagGraph(tags);
-      logGroups(tags.length, buildGroups(byId));
-    } catch (error) {
-      console.error(LOG_PREFIX, "Grouped Tags View konnte die Tags nicht laden.", error);
+  function GroupedTagsView() {
+    const [state, setState] = React.useState({ status: "loading" });
+
+    React.useEffect(() => {
+      let cancelled = false;
+      fetchTags()
+        .then((tags) => {
+          if (!cancelled) {
+            setState({ status: "ready", data: buildGroups(buildTagGraph(tags)) });
+          }
+        })
+        .catch((error) => {
+          console.error(LOG_PREFIX, error);
+          if (!cancelled) setState({ status: "error" });
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, []);
+
+    let content;
+    if (state.status === "loading") {
+      content = h("p", null, "Lade Tags …");
+    } else if (state.status === "error") {
+      content = h("p", null, "Grouped Tags View konnte die Tags nicht laden.");
+    } else {
+      const { groups, uncategorized } = state.data;
+      content = [
+        groups.length === 0 &&
+          h("p", { key: "empty" }, "Keine Tag-Gruppen vorhanden."),
+        ...groups.map((group) =>
+          h(GroupList, {
+            key: group.parent.id,
+            title: group.parent.name,
+            tags: group.children,
+          })
+        ),
+        uncategorized.length > 0 &&
+          h(GroupList, { key: "uncategorized", title: "Sonstige", tags: uncategorized }),
+      ];
     }
+
+    return h("div", { id: "grouped-tags-view" }, content);
   }
 
-  init();
+  // FilteredTagList is only rendered on /tags (see Tags.tsx in Stash v0.31.1).
+  // The original list stays below the grouped view for now.
+  // React calls components with (props, context), Stash appends the render
+  // result, so the result is always the last argument.
+  PluginApi.patch.after("FilteredTagList", function (...args) {
+    const result = args[args.length - 1];
+    return h(React.Fragment, null, h(GroupedTagsView), result);
+  });
+
+  console.log(LOG_PREFIX, "loaded");
 })();

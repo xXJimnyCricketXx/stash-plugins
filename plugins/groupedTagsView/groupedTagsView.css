@@ -1,1 +1,21 @@
 /* Grouped Tags View */
+
+#grouped-tags-view {
+  margin: 0 0 1.5rem;
+  padding: 1rem;
+  border: 1px dashed currentColor;
+  border-radius: 0.25rem;
+}
+
+#grouped-tags-view .gtv-group + .gtv-group {
+  margin-top: 1rem;
+}
+
+#grouped-tags-view .gtv-group h3 {
+  font-size: 1.25rem;
+  margin-bottom: 0.25rem;
+}
+
+#grouped-tags-view .gtv-group ul {
+  margin: 0;
+}
