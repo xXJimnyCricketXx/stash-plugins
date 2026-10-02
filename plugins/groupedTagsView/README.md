@@ -8,10 +8,10 @@ Turns the flat tags page of [Stash](https://github.com/stashapp/stash) into a ga
 grouped by category: parent tags become headings, their child tags image cards.
 
 <p>
-  <img src="https://img.shields.io/badge/Version-1.2.0-644D3F?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/Version-1.3.0-644D3F?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/Tested%20with-Stash%20v0.31.1-644D3F?style=for-the-badge" alt="Tested with Stash v0.31.1">
   <img src="https://img.shields.io/badge/Type-UI%20Plugin-644D3F?style=for-the-badge" alt="UI Plugin">
-  <img src="https://img.shields.io/badge/License-MIT-644D3F?style=for-the-badge" alt="License">
+  <img src="https://img.shields.io/badge/License-AGPL--3.0-644D3F?style=for-the-badge" alt="License">
 </p>
 
 **[Overview](#-overview)** ·
@@ -55,7 +55,7 @@ and does not change your data (with one optional exception, see
 
 - **Empty categories** — An optional category root tag lets new categories appear before they have any tags.
 
-- **Zoom slider** — Stash's zoom slider controls the card size.
+- **Card size and format** — Stash's zoom slider controls the card size; cards are shown in landscape or, optionally, portrait format.
 
 - **Tag statistics** — Optionally shows the number of scenes, images, galleries, performers etc. when hovering a card, linked to the filtered lists like in Stash.
 
@@ -255,6 +255,7 @@ All settings are found under **Settings → Plugins → Grouped Tags View**.
 | Hide ungrouped tags | Yes/No | No | Hides the *Ungrouped* section. |
 | Hide tag counts | Yes/No | No | Hides the number of tags next to each category heading. |
 | Show tag statistics | Yes/No | No | Shows scene, image, gallery, performer etc. counts when hovering a card (always visible on touch devices). |
+| Portrait cards | Yes/No | No | Shows the cards in portrait format (2:3) instead of landscape (3:2). |
 
 Card size is controlled with Stash's own zoom slider in the toolbar.
 
@@ -268,7 +269,7 @@ Card size is controlled with Stash's own zoom slider in the toolbar.
 
 | **Version** | **Features** | **Status** |
 | :---: | :--- | :---: |
-| **Next** | <ul><li>Card format: landscape or portrait</li></ul> | <img src="https://img.shields.io/badge/Planned-6E7681?style=for-the-badge" alt="Planned"> |
+| **1.3.0** | <ul><li>Card format: landscape or portrait</li></ul> | <img src="https://img.shields.io/badge/Released-644D3F?style=for-the-badge" alt="Released"> |
 | **1.2.0** | <ul><li>Custom category order with <i>Change order</i></li></ul> | <img src="https://img.shields.io/badge/Released-644D3F?style=for-the-badge" alt="Released"> |
 | **1.1.0** | <ul><li>Collapsible categories</li></ul> | <img src="https://img.shields.io/badge/Released-644D3F?style=for-the-badge" alt="Released"> |
 | **1.0.0** | <ul><li>Grouped gallery with category headings and image cards</li><li>Toggle next to Stash's display mode buttons</li><li>Search and sidebar filters</li><li>Settings, category root tag, English and German texts</li><li>Optional tag statistics</li></ul> | <img src="https://img.shields.io/badge/Released-644D3F?style=for-the-badge" alt="Released"> |
@@ -277,7 +278,9 @@ Card size is controlled with Stash's own zoom slider in the toolbar.
 
 ## <img src="https://api.iconify.design/lucide/scale.svg?color=%23644D3F" width="20"> License
 
-This plugin is licensed under the **MIT License**.
+Copyright © 2026 xXJimnyCricketXx
+
+This plugin is licensed under the **GNU Affero General Public License v3.0** (AGPL-3.0).
 
 See [`LICENSE`](../../LICENSE) for details.
 

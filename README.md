@@ -14,7 +14,7 @@ installable directly from Stash through a single plugin source.
 <p>
   <img src="https://img.shields.io/badge/Plugins-1-644D3F?style=for-the-badge" alt="Plugins">
   <img src="https://img.shields.io/badge/Tested%20with-Stash%20v0.31.1-644D3F?style=for-the-badge" alt="Tested with Stash v0.31.1">
-  <img src="https://img.shields.io/badge/License-MIT-644D3F?style=for-the-badge" alt="License">
+  <img src="https://img.shields.io/badge/License-AGPL--3.0-644D3F?style=for-the-badge" alt="License">
 </p>
 
 **[Overview](#-overview)** ·
@@ -40,7 +40,7 @@ with features, screenshots and configuration.
 
 | **Plugin** | **Description** | **Version** |
 | :--- | :--- | :---: |
-| [**Grouped Tags View**](plugins/groupedTagsView) | Shows the tags page as a categorised gallery: parent tags become headings, their child tags image cards. | 1.2.0 |
+| [**Grouped Tags View**](plugins/groupedTagsView) | Shows the tags page as a categorised gallery: parent tags become headings, their child tags image cards. | 1.3.0 |
 
 <br/><br/>
 
@@ -63,7 +63,10 @@ Updates appear in the same place under **Installed Plugins → Check for Updates
 
 ## <img src="https://api.iconify.design/lucide/scale.svg?color=%23644D3F" width="20"> License
 
-All plugins in this repository are licensed under the **MIT License**.
+All plugins in this repository are licensed under the **GNU Affero General Public License v3.0** (AGPL-3.0).
+
+You may use, modify and share them, as long as modified versions stay open source under the same license
+and keep the original copyright notice.
 
 See [`LICENSE`](LICENSE) for details.
 

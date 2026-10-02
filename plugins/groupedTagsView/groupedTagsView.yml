@@ -1,6 +1,6 @@
 name: Grouped Tags View
 description: Displays Stash tags grouped by their parent tags in a visual gallery.
-version: 1.2.0
+version: 1.3.0
 url: https://github.com/xXJimnyCricketXx/stash-plugins/tree/main/plugins/groupedTagsView
 ui:
   javascript:
@@ -23,4 +23,8 @@ settings:
   showStatistics:
     displayName: Show tag statistics
     description: Show the number of scenes, images, galleries, performers etc. on each tag card when hovering it (always visible on touch devices).
+    type: BOOLEAN
+  portraitCards:
+    displayName: Portrait cards
+    description: Show the tag cards in portrait format (2:3) instead of landscape (3:2).
     type: BOOLEAN

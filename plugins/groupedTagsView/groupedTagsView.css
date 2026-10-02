@@ -1,4 +1,9 @@
-/* Grouped Tags View */
+/*
+ * Grouped Tags View – a Stash UI plugin
+ * Copyright (C) 2026 xXJimnyCricketXx
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ * https://github.com/xXJimnyCricketXx/stash-plugins
+ */
 
 /* The grouped view shows all tags, so Stash's pagination does not apply. */
 .tag-list:has(#grouped-tags-view) .pagination-index-container,
@@ -114,6 +119,10 @@
 #grouped-tags-view .gtv-card-image {
   position: relative;
   aspect-ratio: 3 / 2;
+}
+
+#grouped-tags-view.gtv-portrait .gtv-card-image {
+  aspect-ratio: 2 / 3;
 }
 
 #grouped-tags-view .gtv-card-image > a {

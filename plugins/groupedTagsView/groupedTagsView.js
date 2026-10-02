@@ -1,3 +1,10 @@
+/*
+ * Grouped Tags View – a Stash UI plugin
+ * Copyright (C) 2026 xXJimnyCricketXx
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ * https://github.com/xXJimnyCricketXx/stash-plugins
+ */
+
 (function () {
   "use strict";
 
@@ -118,6 +125,7 @@
             hideUncategorized: settings.hideUncategorized === true,
             hideCounts: settings.hideCounts === true,
             showStatistics: settings.showStatistics === true,
+            portraitCards: settings.portraitCards === true,
             categoryTag: (settings.categoryTag || "").trim(),
             // Hidden setting (not in the .yml), written by the order editor.
             categoryOrder: Array.isArray(settings.categoryOrder)
@@ -755,6 +763,8 @@
       setReloadKey((n) => n + 1);
     };
 
+    const portrait = tagsState.status === "ready" && tagsState.value.settings.portraitCards;
+
     let content;
     if (tagsState.status === "error" || matchState.status === "error") {
       content = h("p", { className: "gtv-message" }, texts.loadError);
@@ -837,7 +847,11 @@
 
     return h(
       "div",
-      { id: "grouped-tags-view", style: { "--gtv-card-width": `${cardWidth}px` } },
+      {
+        id: "grouped-tags-view",
+        className: portrait ? "gtv-portrait" : undefined,
+        style: { "--gtv-card-width": `${cardWidth}px` },
+      },
       content
     );
   }
