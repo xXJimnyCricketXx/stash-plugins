@@ -1,0 +1,11 @@
+# Interne Entwicklungsnotizen
+dev/
+
+# Build-Ausgabe
+_site/
+
+# OS / Editor
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/

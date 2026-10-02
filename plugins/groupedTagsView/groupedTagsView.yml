@@ -1,0 +1,9 @@
+name: Grouped Tags View
+description: Displays Stash tags grouped by their parent tags in a visual gallery.
+version: 0.1.0
+url: https://github.com/xXJimnyCricketXx/stash-plugins/tree/main/plugins/groupedTagsView
+ui:
+  javascript:
+    - groupedTagsView.js
+  css:
+    - groupedTagsView.css
