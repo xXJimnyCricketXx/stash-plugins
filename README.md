@@ -40,7 +40,7 @@ with features, screenshots and configuration.
 
 | **Plugin** | **Description** | **Version** |
 | :--- | :--- | :---: |
-| [**Grouped Tags View**](plugins/groupedTagsView) | Shows the tags page as a categorised gallery: parent tags become headings, their child tags image cards. | 1.0.0 |
+| [**Grouped Tags View**](plugins/groupedTagsView) | Shows the tags page as a categorised gallery: parent tags become headings, their child tags image cards. | 1.1.0 |
 
 <br/><br/>
 

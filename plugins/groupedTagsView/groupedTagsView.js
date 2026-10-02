@@ -266,7 +266,7 @@
 
   const { React, ReactDOM } = PluginApi;
   const { Link } = PluginApi.libraries.ReactRouterDOM;
-  const { faLayerGroup } = PluginApi.libraries.FontAwesomeSolid;
+  const { faLayerGroup, faChevronDown, faChevronRight } = PluginApi.libraries.FontAwesomeSolid;
   const { useIntl } = PluginApi.libraries.Intl;
   const { OverlayTrigger, Tooltip } = PluginApi.libraries.Bootstrap;
   const h = React.createElement;
@@ -297,6 +297,8 @@
       createRoot: (name) => `Create tag "${name}"`,
       rootCreated: (name) => `Tag "${name}" created.`,
       dismiss: "Hide",
+      collapse: "Collapse",
+      expand: "Expand",
     },
     de: {
       grouped: "Gruppiert",
@@ -321,6 +323,8 @@
       createRoot: (name) => `Tag „${name}“ anlegen`,
       rootCreated: (name) => `Tag „${name}“ angelegt.`,
       dismiss: "Ausblenden",
+      collapse: "Einklappen",
+      expand: "Ausklappen",
     },
   };
 
@@ -432,19 +436,48 @@
     );
   }
 
-  function TagGroup({ title, parent, tags, showCount, stats, texts }) {
+  // --- Collapsed categories (remembered in the browser) ---------------------
+
+  const COLLAPSED_STORAGE_KEY = "groupedTagsView.collapsed";
+
+  function readCollapsed() {
+    try {
+      const ids = JSON.parse(localStorage.getItem(COLLAPSED_STORAGE_KEY) || "[]");
+      return new Set(Array.isArray(ids) ? ids : []);
+    } catch (e) {
+      return new Set();
+    }
+  }
+
+  function useCollapsedGroups() {
+    const [collapsed, setCollapsed] = React.useState(readCollapsed);
+    const toggle = (key) => {
+      setCollapsed((previous) => {
+        const next = new Set(previous);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        try {
+          localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify([...next]));
+        } catch (e) {
+          // storage blocked: state only lasts for this page load
+        }
+        return next;
+      });
+    };
+    return [collapsed, toggle];
+  }
+
+  // onToggle is null while searching or filtering: then every category is
+  // open and cannot be collapsed, so no match stays hidden.
+  function TagGroup({ title, parent, tags, showCount, stats, texts, collapsed, onToggle }) {
     const heading = parent
       ? h(Link, { to: tagUrl(parent) }, parent.name)
-      : title;
-    return h(
-      "section",
-      { className: "gtv-group" },
-      h(
-        "h3",
-        { className: "gtv-group-title" },
-        heading,
-        showCount && h("span", { className: "gtv-group-count" }, tags.length)
-      ),
+      : h("span", null, title);
+    // The whole heading row toggles, except the link to the category tag.
+    const onHeadingClick = (event) => {
+      if (onToggle && !event.target.closest("a")) onToggle();
+    };
+    const content =
       tags.length > 0
         ? h(
             "div",
@@ -453,7 +486,31 @@
               h(TagCard, { key: tag.id, tag, counts: stats && stats.get(tag.id), texts })
             )
           )
-        : h("p", { className: "gtv-empty-category" }, texts.emptyCategory)
+        : h("p", { className: "gtv-empty-category" }, texts.emptyCategory);
+    return h(
+      "section",
+      { className: collapsed ? "gtv-group gtv-collapsed" : "gtv-group" },
+      h(
+        "h3",
+        {
+          className: onToggle ? "gtv-group-title gtv-collapsible" : "gtv-group-title",
+          onClick: onHeadingClick,
+        },
+        onToggle &&
+          h(
+            "button",
+            {
+              type: "button",
+              className: "gtv-collapse-toggle",
+              "aria-expanded": !collapsed,
+              title: collapsed ? texts.expand : texts.collapse,
+            },
+            h(PluginApi.components.Icon, { icon: collapsed ? faChevronRight : faChevronDown })
+          ),
+        heading,
+        showCount && h("span", { className: "gtv-group-count" }, tags.length)
+      ),
+      !collapsed && content
     );
   }
 
@@ -539,6 +596,7 @@
     const tagFilter = filter && filter.makeFilter ? filter.makeFilter() : null;
     const filterKey = JSON.stringify([searchTerm, tagFilter]);
     const [reloadKey, setReloadKey] = React.useState(0);
+    const [collapsedGroups, toggleGroup] = useCollapsedGroups();
 
     const tagsState = useAsync(
       () =>
@@ -598,6 +656,8 @@
             showCount: !settings.hideCounts,
             stats,
             texts,
+            collapsed: !matchState.value && collapsedGroups.has(group.key),
+            onToggle: matchState.value ? null : () => toggleGroup(group.key),
           })
         ),
       ];

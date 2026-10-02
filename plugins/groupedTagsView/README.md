@@ -8,7 +8,7 @@ Turns the flat tags page of [Stash](https://github.com/stashapp/stash) into a ga
 grouped by category: parent tags become headings, their child tags image cards.
 
 <p>
-  <img src="https://img.shields.io/badge/Version-1.0.0-644D3F?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/Version-1.1.0-644D3F?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/Tested%20with-Stash%20v0.31.1-644D3F?style=for-the-badge" alt="Tested with Stash v0.31.1">
   <img src="https://img.shields.io/badge/Type-UI%20Plugin-644D3F?style=for-the-badge" alt="UI Plugin">
   <img src="https://img.shields.io/badge/License-MIT-644D3F?style=for-the-badge" alt="License">
@@ -48,6 +48,8 @@ and does not change your data (with one optional exception, see
 - **Seamless toggle** — A new *Grouped* button sits next to Stash's *Grid*, *List* and *Tagger* buttons. *Grid* still shows the original gallery, and your choice is remembered.
 
 - **Search and filters** — The search field and the sidebar filters of the tags page also apply to the grouped view. Stash itself evaluates them, so the results match the original list.
+
+- **Collapsible categories** — Click a category heading to collapse or expand it. The state is remembered in the browser; while searching, all categories are open.
 
 - **Empty categories** — An optional category root tag lets new categories appear before they have any tags.
 
@@ -252,7 +254,7 @@ Card size is controlled with Stash's own zoom slider in the toolbar.
 - [x] Search and sidebar filters
 - [x] Settings, category root tag, English and German texts
 - [x] Optional tag statistics
-- [ ] Collapsible categories
+- [x] Collapsible categories
 - [ ] Change the category order directly in the view (today: via *Sort Name*)
 - [ ] Card format: landscape or portrait
 
