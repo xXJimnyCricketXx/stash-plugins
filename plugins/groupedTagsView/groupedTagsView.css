@@ -1,7 +1,8 @@
 /* Grouped Tags View */
 
 /* The grouped view shows all tags, so Stash's pagination does not apply. */
-.tag-list:has(#grouped-tags-view) .pagination-index-container {
+.tag-list:has(#grouped-tags-view) .pagination-index-container,
+.tag-list:has(#grouped-tags-view) .pagination-footer-container {
   display: none;
 }
 

@@ -21,12 +21,22 @@
     }
   `;
 
-  async function fetchTags() {
+  // Search and sidebar filters are evaluated by Stash itself, so the grouped
+  // view matches exactly what the original list would find.
+  const MATCHING_IDS_QUERY = `
+    query GroupedTagsViewMatches($filter: FindFilterType, $tag_filter: TagFilterType) {
+      findTags(filter: $filter, tag_filter: $tag_filter) {
+        tags { id }
+      }
+    }
+  `;
+
+  async function gqlRequest(query, variables) {
     const response = await fetch("graphql", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ query: TAGS_QUERY }),
+      body: JSON.stringify({ query, variables }),
     });
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
@@ -35,7 +45,59 @@
     if (result.errors && result.errors.length) {
       throw new Error(result.errors.map((e) => e.message).join("; "));
     }
-    return result.data.findTags.tags;
+    return result.data;
+  }
+
+  // Stash unmounts the result area while its own list query loads (e.g. on
+  // every search input), so results are cached for as long as the tags page
+  // is open. The cache is cleared when the page is left.
+  const cache = { tags: null, matches: new Map() };
+
+  function clearCache() {
+    cache.tags = null;
+    cache.matches.clear();
+  }
+
+  function cached(promise, onError) {
+    return promise.catch((error) => {
+      onError();
+      throw error;
+    });
+  }
+
+  function loadTags() {
+    if (!cache.tags) {
+      cache.tags = cached(
+        gqlRequest(TAGS_QUERY).then((data) => data.findTags.tags),
+        () => (cache.tags = null)
+      );
+    }
+    return cache.tags;
+  }
+
+  // Returns a Set of matching tag ids, or null when nothing is filtered.
+  function loadMatchingIds(searchTerm, tagFilter) {
+    const hasCriteria = tagFilter && Object.keys(tagFilter).length > 0;
+    if (!searchTerm && !hasCriteria) {
+      return Promise.resolve(null);
+    }
+    const variables = {
+      filter: { q: searchTerm || undefined, per_page: -1 },
+      tag_filter: hasCriteria ? tagFilter : undefined,
+    };
+    const key = JSON.stringify(variables);
+    if (!cache.matches.has(key)) {
+      cache.matches.set(
+        key,
+        cached(
+          gqlRequest(MATCHING_IDS_QUERY, variables).then(
+            (data) => new Set(data.findTags.tags.map((t) => t.id))
+          ),
+          () => cache.matches.delete(key)
+        )
+      );
+    }
+    return cache.matches.get(key);
   }
 
   const UNCATEGORIZED_TITLE = "Sonstige";
@@ -103,6 +165,22 @@
     }
     groups.sort((a, b) => collator.compare(a.sortKey, b.sortKey));
     return { groups, parentGroupCount };
+  }
+
+  // Keeps only matching tags and drops groups without matches.
+  // If the parent itself matches, its group is shown completely.
+  function filterGroups(groups, matchingIds) {
+    if (!matchingIds) return groups;
+    const result = [];
+    for (const group of groups) {
+      if (group.parent && matchingIds.has(group.parent.id)) {
+        result.push(group);
+        continue;
+      }
+      const tags = group.tags.filter((tag) => matchingIds.has(tag.id));
+      if (tags.length > 0) result.push({ ...group, tags });
+    }
+    return result;
   }
 
   const { React, ReactDOM } = PluginApi;
@@ -193,16 +271,13 @@
     );
   }
 
-  function GroupedTagsView() {
+  function useAsync(load, deps) {
     const [state, setState] = React.useState({ status: "loading" });
-
     React.useEffect(() => {
       let cancelled = false;
-      fetchTags()
-        .then((tags) => {
-          if (!cancelled) {
-            setState({ status: "ready", data: buildGroups(buildTagGraph(tags)) });
-          }
+      load()
+        .then((value) => {
+          if (!cancelled) setState({ status: "ready", value });
         })
         .catch((error) => {
           console.error(LOG_PREFIX, error);
@@ -211,23 +286,43 @@
       return () => {
         cancelled = true;
       };
-    }, []);
+    }, deps);
+    return state;
+  }
+
+  function GroupedTagsView({ filter }) {
+    const searchTerm = (filter && filter.searchTerm) || "";
+    const tagFilter = filter && filter.makeFilter ? filter.makeFilter() : null;
+    const filterKey = JSON.stringify([searchTerm, tagFilter]);
+
+    const tagsState = useAsync(
+      () => loadTags().then((tags) => buildGroups(buildTagGraph(tags))),
+      []
+    );
+    const matchState = useAsync(
+      () => loadMatchingIds(searchTerm, tagFilter),
+      [filterKey]
+    );
 
     let content;
-    if (state.status === "loading") {
-      content = h("p", { className: "gtv-message" }, "Lade Tags …");
-    } else if (state.status === "error") {
+    if (tagsState.status === "error" || matchState.status === "error") {
       content = h(
         "p",
         { className: "gtv-message" },
         "Grouped Tags View konnte die Tags nicht laden."
       );
+    } else if (tagsState.status === "loading" || matchState.status === "loading") {
+      content = h("p", { className: "gtv-message" }, "Lade Tags …");
     } else {
-      const { groups, parentGroupCount } = state.data;
+      const { groups, parentGroupCount } = tagsState.value;
+      const visibleGroups = filterGroups(groups, matchState.value);
       content = [
         parentGroupCount === 0 &&
           h("p", { key: "empty", className: "gtv-message" }, "Keine Tag-Gruppen vorhanden."),
-        ...groups.map((group) =>
+        matchState.value &&
+          visibleGroups.length === 0 &&
+          h("p", { key: "no-match", className: "gtv-message" }, "Keine passenden Tags gefunden."),
+        ...visibleGroups.map((group) =>
           h(TagGroup, {
             key: group.key,
             title: group.title,
@@ -315,8 +410,13 @@
   // "after" functions get (props, context, result): result is the last argument.
   PluginApi.patch.after("FilteredTagList", function (...args) {
     const result = args[args.length - 1];
-    return h(React.Fragment, null, result, h(GroupedModeButton));
+    return h(React.Fragment, null, result, h(GroupedModeButton), h(TagsPageLifecycle));
   });
+
+  function TagsPageLifecycle() {
+    React.useEffect(() => clearCache, []);
+    return null;
+  }
 
   function DisplayModeSync({ displayMode }) {
     React.useEffect(() => {
@@ -325,14 +425,14 @@
     return null;
   }
 
-  function GroupedOrOriginal({ displayMode, renderOriginal }) {
+  function GroupedOrOriginal({ displayMode, filter, renderOriginal }) {
     const state = useViewState();
     const grouped = state.grouped && displayMode === GRID_DISPLAY_MODE;
     return h(
       React.Fragment,
       null,
       h(DisplayModeSync, { displayMode }),
-      grouped ? h(GroupedTagsView) : renderOriginal()
+      grouped ? h(GroupedTagsView, { filter }) : renderOriginal()
     );
   }
 
@@ -346,6 +446,7 @@
     const props = args[0];
     return h(GroupedOrOriginal, {
       displayMode: props.filter ? props.filter.displayMode : null,
+      filter: props.filter,
       renderOriginal: () => next(...originalArgs),
     });
   });
