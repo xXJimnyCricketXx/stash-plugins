@@ -8,7 +8,7 @@ Turns the flat tags page of [Stash](https://github.com/stashapp/stash) into a ga
 grouped by category: parent tags become headings, their child tags image cards.
 
 <p>
-  <img src="https://img.shields.io/badge/Version-1.1.0-644D3F?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/Version-1.2.0-644D3F?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/Tested%20with-Stash%20v0.31.1-644D3F?style=for-the-badge" alt="Tested with Stash v0.31.1">
   <img src="https://img.shields.io/badge/Type-UI%20Plugin-644D3F?style=for-the-badge" alt="UI Plugin">
   <img src="https://img.shields.io/badge/License-MIT-644D3F?style=for-the-badge" alt="License">
@@ -51,6 +51,8 @@ and does not change your data (with one optional exception, see
 
 - **Collapsible categories** — Click a category heading to collapse or expand it. The state is remembered in the browser; while searching, all categories are open.
 
+- **Category order** — Arrange the categories in any order with the *Change order* button of the grouped view. The order is saved in Stash, your tags stay untouched.
+
 - **Empty categories** — An optional category root tag lets new categories appear before they have any tags.
 
 - **Zoom slider** — Stash's zoom slider controls the card size.
@@ -68,6 +70,12 @@ and does not change your data (with one optional exception, see
 <img src="../../assets/readme/groupedTagsView/screenshots/groupedTagsView_groupedView.png" alt="Grouped view" width="100%">
 
 <sub>The grouped view with the new <b>Grouped</b> button next to Grid, List and Tagger.</sub>
+
+<br/><br/>
+
+<img src="../../assets/readme/groupedTagsView/screenshots/groupedTagsView_CategoryOrder.png" alt="Change order" width="100%">
+
+<sub>Arranging the categories with <b>Change order</b>.</sub>
 
 <br/><br/>
 
@@ -222,9 +230,18 @@ Alternatively, open the category tag and add its tags under **Sub-Tags**.
 
 ### Change the order
 
-Categories and cards are sorted alphabetically by name. To change the position of a tag
-without renaming it, set a **Sort Name** in the tag's edit form, e.g. `01` for *Location*.
-The sort name is only used for sorting – the tag is still displayed as *Location*.
+1. Click **Change order** at the top right of the grouped view.
+2. Move the categories with the arrow buttons.
+3. Click **Done** to save, or **Alphabetical** and **Done** to go back to the default order.
+
+The order is stored in the plugin configuration of Stash; your tags are not changed.
+New categories are added alphabetically after the arranged ones. Cards inside a category
+are always sorted alphabetically – use a tag's **Sort Name** (e.g. `01`) to move a card
+without renaming it.
+
+> [!WARNING]
+> Close any other open Stash settings tab before changing the order. When a settings
+> page that was opened earlier saves a plugin setting, it also writes back the old order.
 
 <br/><br/>
 
@@ -249,14 +266,12 @@ Card size is controlled with Stash's own zoom slider in the toolbar.
 
 ## <img src="https://api.iconify.design/lucide/map.svg?color=%23644D3F" width="20"> Roadmap
 
-- [x] Grouped gallery with category headings and image cards
-- [x] Toggle next to Stash's display mode buttons
-- [x] Search and sidebar filters
-- [x] Settings, category root tag, English and German texts
-- [x] Optional tag statistics
-- [x] Collapsible categories
-- [ ] Change the category order directly in the view (today: via *Sort Name*)
-- [ ] Card format: landscape or portrait
+| **Version** | **Features** | **Status** |
+| :---: | :--- | :---: |
+| **Next** | <ul><li>Card format: landscape or portrait</li></ul> | <img src="https://img.shields.io/badge/Planned-6E7681?style=for-the-badge" alt="Planned"> |
+| **1.2.0** | <ul><li>Custom category order with <i>Change order</i></li></ul> | <img src="https://img.shields.io/badge/Released-644D3F?style=for-the-badge" alt="Released"> |
+| **1.1.0** | <ul><li>Collapsible categories</li></ul> | <img src="https://img.shields.io/badge/Released-644D3F?style=for-the-badge" alt="Released"> |
+| **1.0.0** | <ul><li>Grouped gallery with category headings and image cards</li><li>Toggle next to Stash's display mode buttons</li><li>Search and sidebar filters</li><li>Settings, category root tag, English and German texts</li><li>Optional tag statistics</li></ul> | <img src="https://img.shields.io/badge/Released-644D3F?style=for-the-badge" alt="Released"> |
 
 <br/><br/>
 

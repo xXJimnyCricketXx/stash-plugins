@@ -10,6 +10,32 @@
   padding: 0 1rem 1.5rem;
 }
 
+#grouped-tags-view .gtv-view-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+#grouped-tags-view .gtv-order-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.4);
+}
+
+/* Fixed size, so disabled buttons (first/last row) keep the names aligned. */
+#grouped-tags-view .gtv-order-row .btn {
+  width: 2rem;
+  flex: 0 0 auto;
+}
+
+#grouped-tags-view .gtv-order-name {
+  margin-left: 0.5rem;
+  font-size: 1.25rem;
+}
+
 #grouped-tags-view .gtv-message {
   margin: 1rem 0;
   text-align: center;

@@ -119,6 +119,10 @@
             hideCounts: settings.hideCounts === true,
             showStatistics: settings.showStatistics === true,
             categoryTag: (settings.categoryTag || "").trim(),
+            // Hidden setting (not in the .yml), written by the order editor.
+            categoryOrder: Array.isArray(settings.categoryOrder)
+              ? settings.categoryOrder.map(String)
+              : [],
           };
         }),
         () => (cache.settings = null)
@@ -217,8 +221,9 @@
   // optional root tag (so a new category shows up before it has children).
   // The root itself is never shown. A tag with several parents appears in
   // each of their groups. Tags without parent and without children are
-  // "ungrouped". Categories are sorted by title, "ungrouped" always comes last.
-  function buildGroups(byId, root, ungroupedTitle) {
+  // "ungrouped". Categories follow the saved order (ids); categories missing
+  // from it come after, sorted by title. "Ungrouped" always comes last.
+  function buildGroups(byId, root, ungroupedTitle, order) {
     const groups = [];
     const ungrouped = [];
     for (const node of byId.values()) {
@@ -236,7 +241,13 @@
         ungrouped.push(node);
       }
     }
-    groups.sort((a, b) => collator.compare(a.sortKey, b.sortKey));
+    const position = new Map((order || []).map((id, index) => [id, index]));
+    groups.sort((a, b) => {
+      const pa = position.has(a.key) ? position.get(a.key) : Infinity;
+      const pb = position.has(b.key) ? position.get(b.key) : Infinity;
+      if (pa !== pb) return pa - pb;
+      return collator.compare(a.sortKey, b.sortKey);
+    });
     const categoryCount = groups.length;
     if (ungrouped.length > 0) {
       groups.push({
@@ -266,7 +277,14 @@
 
   const { React, ReactDOM } = PluginApi;
   const { Link } = PluginApi.libraries.ReactRouterDOM;
-  const { faLayerGroup, faChevronDown, faChevronRight } = PluginApi.libraries.FontAwesomeSolid;
+  const {
+    faLayerGroup,
+    faChevronDown,
+    faChevronRight,
+    faArrowUp,
+    faArrowDown,
+    faSort,
+  } = PluginApi.libraries.FontAwesomeSolid;
   const { useIntl } = PluginApi.libraries.Intl;
   const { OverlayTrigger, Tooltip } = PluginApi.libraries.Bootstrap;
   const h = React.createElement;
@@ -297,6 +315,12 @@
       createRoot: (name) => `Create tag "${name}"`,
       rootCreated: (name) => `Tag "${name}" created.`,
       dismiss: "Hide",
+      editOrder: "Change order",
+      done: "Done",
+      cancel: "Cancel",
+      alphabetical: "Alphabetical",
+      moveUp: "Move up",
+      moveDown: "Move down",
       collapse: "Collapse",
       expand: "Expand",
     },
@@ -323,6 +347,12 @@
       createRoot: (name) => `Tag „${name}“ anlegen`,
       rootCreated: (name) => `Tag „${name}“ angelegt.`,
       dismiss: "Ausblenden",
+      editOrder: "Reihenfolge ändern",
+      done: "Fertig",
+      cancel: "Abbrechen",
+      alphabetical: "Alphabetisch",
+      moveUp: "Nach oben",
+      moveDown: "Nach unten",
       collapse: "Einklappen",
       expand: "Ausklappen",
     },
@@ -514,6 +544,109 @@
     );
   }
 
+  // --- Category order editor ------------------------------------------------
+
+  // configurePlugin overwrites the whole plugin configuration, so the current
+  // configuration is read fresh and only categoryOrder is changed. Stash's own
+  // hook is used so its cached configuration (settings page) is refreshed.
+  function useSaveCategoryOrder() {
+    const [configurePlugin] = PluginApi.utils.StashService.useConfigurePlugin();
+    return async (ids) => {
+      const data = await gqlRequest(SETTINGS_QUERY);
+      const current = { ...((data.configuration.plugins || {})[PLUGIN_ID] || {}) };
+      if (ids) current.categoryOrder = ids;
+      else delete current.categoryOrder;
+      await configurePlugin({ variables: { plugin_id: PLUGIN_ID, input: current } });
+    };
+  }
+
+  // Shows only the category headings with up/down buttons. Nothing is saved
+  // before "Done"; "Alphabetical" removes the saved order.
+  function CategoryOrderEditor({ groups, texts, onClose, onSaved }) {
+    const saveOrder = useSaveCategoryOrder();
+    const Toast = PluginApi.hooks.useToast();
+    const [keys, setKeys] = React.useState(() => groups.map((group) => group.key));
+    const [reset, setReset] = React.useState(false);
+    const [busy, setBusy] = React.useState(false);
+    const byKey = new Map(groups.map((group) => [group.key, group]));
+
+    const move = (index, offset) => {
+      const next = [...keys];
+      const [key] = next.splice(index, 1);
+      next.splice(index + offset, 0, key);
+      setKeys(next);
+      setReset(false);
+    };
+
+    const onAlphabetical = () => {
+      setKeys(
+        [...groups].sort((a, b) => collator.compare(a.sortKey, b.sortKey)).map((g) => g.key)
+      );
+      setReset(true);
+    };
+
+    const onDone = async () => {
+      setBusy(true);
+      try {
+        await saveOrder(reset ? null : keys);
+        onSaved();
+      } catch (error) {
+        Toast.error(error);
+        setBusy(false);
+      }
+    };
+
+    const button = (label, onClick, className, extra) =>
+      h(
+        "button",
+        { type: "button", className: `btn btn-sm ${className}`, disabled: busy, onClick, ...extra },
+        label
+      );
+
+    return h(
+      "div",
+      { className: "gtv-order-editor" },
+      h(
+        "div",
+        { className: "gtv-view-toolbar" },
+        button(texts.alphabetical, onAlphabetical, "btn-secondary"),
+        button(texts.cancel, onClose, "btn-secondary"),
+        button(texts.done, onDone, "btn-primary")
+      ),
+      keys.map((key, index) =>
+        h(
+          "div",
+          { key, className: "gtv-order-row" },
+          h(
+            "button",
+            {
+              type: "button",
+              className: "btn btn-secondary btn-sm",
+              title: texts.moveUp,
+              "aria-label": texts.moveUp,
+              disabled: busy || index === 0,
+              onClick: () => move(index, -1),
+            },
+            h(PluginApi.components.Icon, { icon: faArrowUp })
+          ),
+          h(
+            "button",
+            {
+              type: "button",
+              className: "btn btn-secondary btn-sm",
+              title: texts.moveDown,
+              "aria-label": texts.moveDown,
+              disabled: busy || index === keys.length - 1,
+              onClick: () => move(index, 1),
+            },
+            h(PluginApi.components.Icon, { icon: faArrowDown })
+          ),
+          h("span", { className: "gtv-order-name" }, byKey.get(key).parent.name)
+        )
+      )
+    );
+  }
+
   const ROOT_HINT_STORAGE_KEY = "groupedTagsView.rootHintDismissed";
 
   function readRootHintDismissed() {
@@ -597,6 +730,7 @@
     const filterKey = JSON.stringify([searchTerm, tagFilter]);
     const [reloadKey, setReloadKey] = React.useState(0);
     const [collapsedGroups, toggleGroup] = useCollapsedGroups();
+    const [editingOrder, setEditingOrder] = React.useState(false);
 
     const tagsState = useAsync(
       () =>
@@ -629,38 +763,72 @@
     } else {
       const { byId, settings, stats } = tagsState.value;
       const root = findRoot(byId, rootNames(settings));
-      const { groups, categoryCount } = buildGroups(byId, root, texts.ungrouped);
-      const shownGroups = settings.hideUncategorized
-        ? groups.filter((group) => group.parent)
-        : groups;
+      const { groups, categoryCount } = buildGroups(
+        byId,
+        root,
+        texts.ungrouped,
+        settings.categoryOrder
+      );
+      const categories = groups.filter((group) => group.parent);
+      const shownGroups = settings.hideUncategorized ? categories : groups;
       const visibleGroups = filterGroups(shownGroups, matchState.value);
-      content = [
-        !root &&
-          h(RootTagHint, {
-            key: "root-hint",
-            name: settings.categoryTag || texts.rootName,
-            texts,
-            onCreated: reload,
-          }),
-        categoryCount === 0 &&
-          h("p", { key: "empty", className: "gtv-message" }, texts.noCategories),
-        matchState.value &&
-          visibleGroups.length === 0 &&
-          h("p", { key: "no-match", className: "gtv-message" }, texts.noMatches),
-        ...visibleGroups.map((group) =>
-          h(TagGroup, {
-            key: group.key,
-            title: group.title,
-            parent: group.parent,
-            tags: group.tags,
-            showCount: !settings.hideCounts,
-            stats,
-            texts,
-            collapsed: !matchState.value && collapsedGroups.has(group.key),
-            onToggle: matchState.value ? null : () => toggleGroup(group.key),
-          })
-        ),
-      ];
+      const canEditOrder = !matchState.value && categories.length > 1;
+
+      if (editingOrder && canEditOrder) {
+        content = h(CategoryOrderEditor, {
+          groups: categories,
+          texts,
+          onClose: () => setEditingOrder(false),
+          onSaved: () => {
+            setEditingOrder(false);
+            reload();
+          },
+        });
+      } else {
+        content = [
+          canEditOrder &&
+            h(
+              "div",
+              { key: "toolbar", className: "gtv-view-toolbar" },
+              h(
+                "button",
+                {
+                  type: "button",
+                  className: "btn btn-secondary btn-sm",
+                  onClick: () => setEditingOrder(true),
+                },
+                h(PluginApi.components.Icon, { icon: faSort }),
+                " ",
+                texts.editOrder
+              )
+            ),
+          !root &&
+            h(RootTagHint, {
+              key: "root-hint",
+              name: settings.categoryTag || texts.rootName,
+              texts,
+              onCreated: reload,
+            }),
+          categoryCount === 0 &&
+            h("p", { key: "empty", className: "gtv-message" }, texts.noCategories),
+          matchState.value &&
+            visibleGroups.length === 0 &&
+            h("p", { key: "no-match", className: "gtv-message" }, texts.noMatches),
+          ...visibleGroups.map((group) =>
+            h(TagGroup, {
+              key: group.key,
+              title: group.title,
+              parent: group.parent,
+              tags: group.tags,
+              showCount: !settings.hideCounts,
+              stats,
+              texts,
+              collapsed: !matchState.value && collapsedGroups.has(group.key),
+              onToggle: matchState.value ? null : () => toggleGroup(group.key),
+            })
+          ),
+        ];
+      }
     }
 
     const zoomIndex = filter && Number.isInteger(filter.zoomIndex) ? filter.zoomIndex : 1;
