@@ -61,7 +61,13 @@
 }
 
 #grouped-tags-view .gtv-card-image {
+  position: relative;
   aspect-ratio: 3 / 2;
+}
+
+#grouped-tags-view .gtv-card-image > a {
+  display: block;
+  height: 100%;
 }
 
 #grouped-tags-view .gtv-card-image img {
@@ -99,11 +105,57 @@
 }
 
 #grouped-tags-view .gtv-card-name {
+  display: block;
+  color: inherit;
+  text-decoration: none;
   padding: 0.5rem 0.75rem;
   font-weight: 600;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* Statistics bar over the bottom of the image, shown on hover. */
+#grouped-tags-view .gtv-card-stats {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem 0.75rem;
+  padding: 0.3rem 0.5rem;
+  background: rgba(0, 0, 0, 0.6);
+  font-size: 0.85rem;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+#grouped-tags-view .gtv-card:hover .gtv-card-stats,
+#grouped-tags-view .gtv-card:focus-within .gtv-card-stats {
+  opacity: 1;
+}
+
+#grouped-tags-view .gtv-card-stats a {
+  color: #fff;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+#grouped-tags-view .gtv-card-stats a:hover {
+  text-decoration: underline;
+}
+
+#grouped-tags-view .gtv-card-stats .fa-icon {
+  margin-right: 0.25rem;
+}
+
+/* No hover on touch devices: always show the statistics. */
+@media (hover: none) {
+  #grouped-tags-view .gtv-card-stats {
+    opacity: 1;
+  }
 }
 
 @media (max-width: 576px) {

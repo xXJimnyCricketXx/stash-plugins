@@ -20,3 +20,7 @@ settings:
     displayName: Hide tag counts
     description: Do not show the number of tags next to each category heading.
     type: BOOLEAN
+  showStatistics:
+    displayName: Show tag statistics
+    description: Show the number of scenes, images, galleries, performers etc. on each tag card when hovering it (always visible on touch devices).
+    type: BOOLEAN

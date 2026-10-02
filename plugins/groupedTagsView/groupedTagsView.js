@@ -35,6 +35,25 @@
     }
   `;
 
+  // Direct counts, like Stash's own tag cards (no sub-tag content).
+  // Only queried when the statistics setting is on.
+  const STATS_QUERY = `
+    query GroupedTagsViewStats {
+      findTags(filter: { per_page: -1 }) {
+        tags {
+          id
+          scene_count
+          image_count
+          gallery_count
+          group_count
+          scene_marker_count
+          performer_count
+          studio_count
+        }
+      }
+    }
+  `;
+
   const SETTINGS_QUERY = `
     query GroupedTagsViewSettings {
       configuration {
@@ -63,11 +82,12 @@
   // Stash unmounts the result area while its own list query loads (e.g. on
   // every search input), so results are cached for as long as the tags page
   // is open. The cache is cleared when the page is left.
-  const cache = { tags: null, settings: null, matches: new Map() };
+  const cache = { tags: null, settings: null, stats: null, matches: new Map() };
 
   function clearCache() {
     cache.tags = null;
     cache.settings = null;
+    cache.stats = null;
     cache.matches.clear();
   }
 
@@ -97,6 +117,7 @@
           return {
             hideUncategorized: settings.hideUncategorized === true,
             hideCounts: settings.hideCounts === true,
+            showStatistics: settings.showStatistics === true,
             categoryTag: (settings.categoryTag || "").trim(),
           };
         }),
@@ -104,6 +125,19 @@
       );
     }
     return cache.settings;
+  }
+
+  // Map of tag id -> counts.
+  function loadStats() {
+    if (!cache.stats) {
+      cache.stats = cached(
+        gqlRequest(STATS_QUERY).then(
+          (data) => new Map(data.findTags.tags.map((t) => [t.id, t]))
+        ),
+        () => (cache.stats = null)
+      );
+    }
+    return cache.stats;
   }
 
   // Returns a Set of matching tag ids, or null when nothing is filtered.
@@ -248,6 +282,15 @@
       noMatches: "No matching tags found.",
       ungrouped: "Ungrouped",
       emptyCategory: "No tags in this category yet.",
+      stats: {
+        scene: "Scenes",
+        image: "Images",
+        gallery: "Galleries",
+        group: "Groups",
+        marker: "Markers",
+        performer: "Performers",
+        studio: "Studios",
+      },
       rootName: "Categories",
       rootHint: (name) =>
         `Tags with the parent tag "${name}" are shown as categories even before they have tags of their own.`,
@@ -263,6 +306,15 @@
       noMatches: "Keine passenden Tags gefunden.",
       ungrouped: "Ohne Gruppe",
       emptyCategory: "Noch keine Tags in dieser Kategorie.",
+      stats: {
+        scene: "Szenen",
+        image: "Bilder",
+        gallery: "Galerien",
+        group: "Gruppen",
+        marker: "Marker",
+        performer: "Darsteller",
+        studio: "Studios",
+      },
       rootName: "Kategorien",
       rootHint: (name) =>
         `Tags mit dem übergeordneten Tag „${name}“ werden als Kategorie angezeigt, auch solange sie noch keine eigenen Tags haben.`,
@@ -326,21 +378,61 @@
 
   // image_path always points to an image; for tags without an own image
   // Stash serves its default tag placeholder (URL contains default=true).
-  function TagCard({ tag }) {
-    const isDefaultImage = /[?&]default=true/.test(tag.image_path || "");
+  // Same counts, icons and target lists as Stash's own tag card popovers.
+  const STAT_TYPES = [
+    { key: "scene", field: "scene_count", icon: "faPlayCircle", url: "makeTagScenesUrl" },
+    { key: "image", field: "image_count", icon: "faImage", url: "makeTagImagesUrl" },
+    { key: "gallery", field: "gallery_count", icon: "faImages", url: "makeTagGalleriesUrl" },
+    { key: "group", field: "group_count", icon: "faFilm", url: "makeTagGroupsUrl" },
+    { key: "marker", field: "scene_marker_count", icon: "faMapMarkerAlt", url: "makeTagSceneMarkersUrl" },
+    { key: "performer", field: "performer_count", icon: "faUser", url: "makeTagPerformersUrl" },
+    { key: "studio", field: "studio_count", icon: "faVideo", url: "makeTagStudiosUrl" },
+  ];
+
+  function TagStats({ tag, counts, texts }) {
+    const { NavUtils } = PluginApi.utils;
+    const icons = PluginApi.libraries.FontAwesomeSolid;
+    const items = STAT_TYPES.filter((type) => counts[type.field] > 0);
+    if (items.length === 0) return null;
     return h(
-      Link,
-      { to: tagUrl(tag), className: "card gtv-card", title: tag.name },
-      h(
-        "div",
-        { className: isDefaultImage ? "gtv-card-image gtv-default-image" : "gtv-card-image" },
-        h("img", { src: tag.image_path, alt: "", loading: "lazy" })
-      ),
-      h("div", { className: "gtv-card-name" }, tag.name)
+      "div",
+      { className: "gtv-card-stats" },
+      items.map((type) =>
+        h(
+          Link,
+          {
+            key: type.key,
+            to: NavUtils[type.url](tag),
+            title: `${texts.stats[type.key]}: ${counts[type.field]}`,
+          },
+          h(PluginApi.components.Icon, { icon: icons[type.icon] }),
+          h("span", null, counts[type.field])
+        )
+      )
     );
   }
 
-  function TagGroup({ title, parent, tags, showCount, emptyText }) {
+  // The card is not one big link: the statistics are links of their own.
+  function TagCard({ tag, counts, texts }) {
+    const isDefaultImage = /[?&]default=true/.test(tag.image_path || "");
+    return h(
+      "div",
+      { className: "card gtv-card", title: tag.name },
+      h(
+        "div",
+        { className: isDefaultImage ? "gtv-card-image gtv-default-image" : "gtv-card-image" },
+        h(
+          Link,
+          { to: tagUrl(tag), tabIndex: -1 },
+          h("img", { src: tag.image_path, alt: "", loading: "lazy" })
+        ),
+        counts && h(TagStats, { tag, counts, texts })
+      ),
+      h(Link, { to: tagUrl(tag), className: "gtv-card-name" }, tag.name)
+    );
+  }
+
+  function TagGroup({ title, parent, tags, showCount, stats, texts }) {
     const heading = parent
       ? h(Link, { to: tagUrl(parent) }, parent.name)
       : title;
@@ -357,9 +449,11 @@
         ? h(
             "div",
             { className: "gtv-grid" },
-            tags.map((tag) => h(TagCard, { key: tag.id, tag }))
+            tags.map((tag) =>
+              h(TagCard, { key: tag.id, tag, counts: stats && stats.get(tag.id), texts })
+            )
           )
-        : h("p", { className: "gtv-empty-category" }, emptyText)
+        : h("p", { className: "gtv-empty-category" }, texts.emptyCategory)
     );
   }
 
@@ -448,10 +542,15 @@
 
     const tagsState = useAsync(
       () =>
-        Promise.all([loadTags(), loadSettings()]).then(([tags, settings]) => ({
-          byId: buildTagGraph(tags),
-          settings,
-        })),
+        Promise.all([loadTags(), loadSettings()])
+          .then(([tags, settings]) =>
+            Promise.all([tags, settings, settings.showStatistics ? loadStats() : null])
+          )
+          .then(([tags, settings, stats]) => ({
+            byId: buildTagGraph(tags),
+            settings,
+            stats,
+          })),
       [reloadKey]
     );
     const matchState = useAsync(
@@ -470,7 +569,7 @@
     } else if (tagsState.status === "loading" || matchState.status === "loading") {
       content = h("p", { className: "gtv-message" }, texts.loading);
     } else {
-      const { byId, settings } = tagsState.value;
+      const { byId, settings, stats } = tagsState.value;
       const root = findRoot(byId, rootNames(settings));
       const { groups, categoryCount } = buildGroups(byId, root, texts.ungrouped);
       const shownGroups = settings.hideUncategorized
@@ -497,7 +596,8 @@
             parent: group.parent,
             tags: group.tags,
             showCount: !settings.hideCounts,
-            emptyText: texts.emptyCategory,
+            stats,
+            texts,
           })
         ),
       ];
