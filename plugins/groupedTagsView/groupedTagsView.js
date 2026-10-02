@@ -2,6 +2,10 @@
   "use strict";
 
   const LOG_PREFIX = "[Grouped Tags View]";
+  const PLUGIN_ID = "groupedTagsView";
+
+  // Card min width per step of Stash's zoom slider (0-3, Stash default 1).
+  const ZOOM_CARD_WIDTHS = [140, 180, 240, 320];
 
   // DisplayMode.Grid in Stash (src/models/list-filter/types.ts, numeric enum).
   const GRID_DISPLAY_MODE = 0;
@@ -31,6 +35,14 @@
     }
   `;
 
+  const SETTINGS_QUERY = `
+    query GroupedTagsViewSettings {
+      configuration {
+        plugins(include: ["${PLUGIN_ID}"])
+      }
+    }
+  `;
+
   async function gqlRequest(query, variables) {
     const response = await fetch("graphql", {
       method: "POST",
@@ -51,10 +63,11 @@
   // Stash unmounts the result area while its own list query loads (e.g. on
   // every search input), so results are cached for as long as the tags page
   // is open. The cache is cleared when the page is left.
-  const cache = { tags: null, matches: new Map() };
+  const cache = { tags: null, settings: null, matches: new Map() };
 
   function clearCache() {
     cache.tags = null;
+    cache.settings = null;
     cache.matches.clear();
   }
 
@@ -73,6 +86,24 @@
       );
     }
     return cache.tags;
+  }
+
+  // Unset BOOLEAN settings are missing from the map, which means false.
+  function loadSettings() {
+    if (!cache.settings) {
+      cache.settings = cached(
+        gqlRequest(SETTINGS_QUERY).then((data) => {
+          const settings = (data.configuration.plugins || {})[PLUGIN_ID] || {};
+          return {
+            hideUncategorized: settings.hideUncategorized === true,
+            hideCounts: settings.hideCounts === true,
+            categoryTag: (settings.categoryTag || "").trim(),
+          };
+        }),
+        () => (cache.settings = null)
+      );
+    }
+    return cache.settings;
   }
 
   // Returns a Set of matching tag ids, or null when nothing is filtered.
@@ -99,8 +130,6 @@
     }
     return cache.matches.get(key);
   }
-
-  const UNCATEGORIZED_TITLE = "Sonstige";
 
   const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
@@ -135,15 +164,34 @@
     return byId;
   }
 
-  // V1 grouping: every tag with children becomes a group of its direct children.
-  // A tag with several parents appears in each of their groups.
-  // Tags without parent and without children end up in "Sonstige".
-  // All groups, "Sonstige" included, are sorted alphabetically by title.
-  function buildGroups(byId) {
-    const groups = [];
-    const uncategorized = [];
+  // Names the category root tag is recognised by when no name is configured.
+  const DEFAULT_ROOT_NAMES = ["Kategorien", "Categories"];
+
+  function rootNames(settings) {
+    return settings.categoryTag ? [settings.categoryTag] : DEFAULT_ROOT_NAMES;
+  }
+
+  function findRoot(byId, names) {
+    const wanted = names.map((n) => n.toLowerCase());
     for (const node of byId.values()) {
-      if (node.childIds.length > 0) {
+      if (wanted.includes(node.name.toLowerCase())) return node;
+    }
+    return null;
+  }
+
+  // A tag is a category if it has children, or if it is a direct child of the
+  // optional root tag (so a new category shows up before it has children).
+  // The root itself is never shown. A tag with several parents appears in
+  // each of their groups. Tags without parent and without children are
+  // "ungrouped". Categories are sorted by title, "ungrouped" always comes last.
+  function buildGroups(byId, root, ungroupedTitle) {
+    const groups = [];
+    const ungrouped = [];
+    for (const node of byId.values()) {
+      if (root && node.id === root.id) continue;
+      const isCategory =
+        node.childIds.length > 0 || (root && node.parentIds.includes(root.id));
+      if (isCategory) {
         groups.push({
           key: node.id,
           parent: node,
@@ -151,20 +199,19 @@
           tags: node.childIds.map((id) => byId.get(id)).sort(compareTags),
         });
       } else if (node.parentIds.length === 0) {
-        uncategorized.push(node);
+        ungrouped.push(node);
       }
     }
-    const parentGroupCount = groups.length;
-    if (uncategorized.length > 0) {
+    groups.sort((a, b) => collator.compare(a.sortKey, b.sortKey));
+    const categoryCount = groups.length;
+    if (ungrouped.length > 0) {
       groups.push({
-        key: "uncategorized",
-        title: UNCATEGORIZED_TITLE,
-        sortKey: UNCATEGORIZED_TITLE,
-        tags: uncategorized.sort(compareTags),
+        key: "ungrouped",
+        title: ungroupedTitle,
+        tags: ungrouped.sort(compareTags),
       });
     }
-    groups.sort((a, b) => collator.compare(a.sortKey, b.sortKey));
-    return { groups, parentGroupCount };
+    return { groups, categoryCount };
   }
 
   // Keeps only matching tags and drops groups without matches.
@@ -186,7 +233,50 @@
   const { React, ReactDOM } = PluginApi;
   const { Link } = PluginApi.libraries.ReactRouterDOM;
   const { faLayerGroup } = PluginApi.libraries.FontAwesomeSolid;
+  const { useIntl } = PluginApi.libraries.Intl;
+  const { OverlayTrigger, Tooltip } = PluginApi.libraries.Bootstrap;
   const h = React.createElement;
+
+  // --- Texts (follow the language set in Stash) ----------------------------
+
+  const TEXTS = {
+    en: {
+      grouped: "Grouped",
+      loading: "Loading tags …",
+      loadError: "Grouped Tags View could not load the tags.",
+      noCategories: "No categories yet.",
+      noMatches: "No matching tags found.",
+      ungrouped: "Ungrouped",
+      emptyCategory: "No tags in this category yet.",
+      rootName: "Categories",
+      rootHint: (name) =>
+        `Tags with the parent tag "${name}" are shown as categories even before they have tags of their own.`,
+      createRoot: (name) => `Create tag "${name}"`,
+      rootCreated: (name) => `Tag "${name}" created.`,
+      dismiss: "Hide",
+    },
+    de: {
+      grouped: "Gruppiert",
+      loading: "Lade Tags …",
+      loadError: "Grouped Tags View konnte die Tags nicht laden.",
+      noCategories: "Noch keine Kategorien vorhanden.",
+      noMatches: "Keine passenden Tags gefunden.",
+      ungrouped: "Ohne Gruppe",
+      emptyCategory: "Noch keine Tags in dieser Kategorie.",
+      rootName: "Kategorien",
+      rootHint: (name) =>
+        `Tags mit dem übergeordneten Tag „${name}“ werden als Kategorie angezeigt, auch solange sie noch keine eigenen Tags haben.`,
+      createRoot: (name) => `Tag „${name}“ anlegen`,
+      rootCreated: (name) => `Tag „${name}“ angelegt.`,
+      dismiss: "Ausblenden",
+    },
+  };
+
+  function useTexts() {
+    const { locale } = useIntl();
+    const language = String(locale || "en").slice(0, 2).toLowerCase();
+    return TEXTS[language] || TEXTS.en;
+  }
 
   // --- View state shared by the toolbar button and the result area ---------
 
@@ -250,7 +340,7 @@
     );
   }
 
-  function TagGroup({ title, parent, tags }) {
+  function TagGroup({ title, parent, tags, showCount, emptyText }) {
     const heading = parent
       ? h(Link, { to: tagUrl(parent) }, parent.name)
       : title;
@@ -261,12 +351,71 @@
         "h3",
         { className: "gtv-group-title" },
         heading,
-        h("span", { className: "gtv-group-count" }, tags.length)
+        showCount && h("span", { className: "gtv-group-count" }, tags.length)
+      ),
+      tags.length > 0
+        ? h(
+            "div",
+            { className: "gtv-grid" },
+            tags.map((tag) => h(TagCard, { key: tag.id, tag }))
+          )
+        : h("p", { className: "gtv-empty-category" }, emptyText)
+    );
+  }
+
+  const ROOT_HINT_STORAGE_KEY = "groupedTagsView.rootHintDismissed";
+
+  function readRootHintDismissed() {
+    try {
+      return localStorage.getItem(ROOT_HINT_STORAGE_KEY) === "true";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // The only write the plugin does: creating the root tag, on explicit click.
+  function RootTagHint({ name, texts, onCreated }) {
+    const [createTag] = PluginApi.utils.StashService.useTagCreate();
+    const Toast = PluginApi.hooks.useToast();
+    const [dismissed, setDismissed] = React.useState(readRootHintDismissed);
+    const [busy, setBusy] = React.useState(false);
+
+    if (dismissed) return null;
+
+    const onCreate = async () => {
+      setBusy(true);
+      try {
+        await createTag({ variables: { input: { name, ignore_auto_tag: true } } });
+        Toast.success(texts.rootCreated(name));
+        onCreated();
+      } catch (error) {
+        Toast.error(error);
+        setBusy(false);
+      }
+    };
+
+    const onDismiss = () => {
+      try {
+        localStorage.setItem(ROOT_HINT_STORAGE_KEY, "true");
+      } catch (e) {
+        // storage blocked: hint only hidden for this page load
+      }
+      setDismissed(true);
+    };
+
+    return h(
+      "div",
+      { className: "gtv-root-hint" },
+      h("span", null, texts.rootHint(name)),
+      h(
+        "button",
+        { type: "button", className: "btn btn-primary btn-sm", disabled: busy, onClick: onCreate },
+        texts.createRoot(name)
       ),
       h(
-        "div",
-        { className: "gtv-grid" },
-        tags.map((tag) => h(TagCard, { key: tag.id, tag }))
+        "button",
+        { type: "button", className: "btn btn-secondary btn-sm", onClick: onDismiss },
+        texts.dismiss
       )
     );
   }
@@ -291,49 +440,78 @@
   }
 
   function GroupedTagsView({ filter }) {
+    const texts = useTexts();
     const searchTerm = (filter && filter.searchTerm) || "";
     const tagFilter = filter && filter.makeFilter ? filter.makeFilter() : null;
     const filterKey = JSON.stringify([searchTerm, tagFilter]);
+    const [reloadKey, setReloadKey] = React.useState(0);
 
     const tagsState = useAsync(
-      () => loadTags().then((tags) => buildGroups(buildTagGraph(tags))),
-      []
+      () =>
+        Promise.all([loadTags(), loadSettings()]).then(([tags, settings]) => ({
+          byId: buildTagGraph(tags),
+          settings,
+        })),
+      [reloadKey]
     );
     const matchState = useAsync(
       () => loadMatchingIds(searchTerm, tagFilter),
-      [filterKey]
+      [filterKey, reloadKey]
     );
+
+    const reload = () => {
+      clearCache();
+      setReloadKey((n) => n + 1);
+    };
 
     let content;
     if (tagsState.status === "error" || matchState.status === "error") {
-      content = h(
-        "p",
-        { className: "gtv-message" },
-        "Grouped Tags View konnte die Tags nicht laden."
-      );
+      content = h("p", { className: "gtv-message" }, texts.loadError);
     } else if (tagsState.status === "loading" || matchState.status === "loading") {
-      content = h("p", { className: "gtv-message" }, "Lade Tags …");
+      content = h("p", { className: "gtv-message" }, texts.loading);
     } else {
-      const { groups, parentGroupCount } = tagsState.value;
-      const visibleGroups = filterGroups(groups, matchState.value);
+      const { byId, settings } = tagsState.value;
+      const root = findRoot(byId, rootNames(settings));
+      const { groups, categoryCount } = buildGroups(byId, root, texts.ungrouped);
+      const shownGroups = settings.hideUncategorized
+        ? groups.filter((group) => group.parent)
+        : groups;
+      const visibleGroups = filterGroups(shownGroups, matchState.value);
       content = [
-        parentGroupCount === 0 &&
-          h("p", { key: "empty", className: "gtv-message" }, "Keine Tag-Gruppen vorhanden."),
+        !root &&
+          h(RootTagHint, {
+            key: "root-hint",
+            name: settings.categoryTag || texts.rootName,
+            texts,
+            onCreated: reload,
+          }),
+        categoryCount === 0 &&
+          h("p", { key: "empty", className: "gtv-message" }, texts.noCategories),
         matchState.value &&
           visibleGroups.length === 0 &&
-          h("p", { key: "no-match", className: "gtv-message" }, "Keine passenden Tags gefunden."),
+          h("p", { key: "no-match", className: "gtv-message" }, texts.noMatches),
         ...visibleGroups.map((group) =>
           h(TagGroup, {
             key: group.key,
             title: group.title,
             parent: group.parent,
             tags: group.tags,
+            showCount: !settings.hideCounts,
+            emptyText: texts.emptyCategory,
           })
         ),
       ];
     }
 
-    return h("div", { id: "grouped-tags-view" }, content);
+    const zoomIndex = filter && Number.isInteger(filter.zoomIndex) ? filter.zoomIndex : 1;
+    const cardWidth =
+      ZOOM_CARD_WIDTHS[Math.min(Math.max(zoomIndex, 0), ZOOM_CARD_WIDTHS.length - 1)];
+
+    return h(
+      "div",
+      { id: "grouped-tags-view", style: { "--gtv-card-width": `${cardWidth}px` } },
+      content
+    );
   }
 
   // --- Toolbar button ------------------------------------------------------
@@ -352,6 +530,7 @@
   // Grid stays the original gallery; this button switches to grid + grouped.
   function GroupedModeButton() {
     const state = useViewState();
+    const texts = useTexts();
     const [group, setGroup] = React.useState(null);
     const active = isGroupedActive(state);
 
@@ -390,16 +569,21 @@
       }
     };
 
+    // Same tooltip as Stash's own display mode buttons.
     return ReactDOM.createPortal(
       h(
-        "button",
-        {
-          type: "button",
-          className: "btn btn-secondary gtv-mode-button" + (active ? " active" : ""),
-          title: "Gruppiert",
-          onClick,
-        },
-        h(PluginApi.components.Icon, { icon: faLayerGroup })
+        OverlayTrigger,
+        { overlay: h(Tooltip, { id: "gtv-display-mode-tooltip" }, texts.grouped) },
+        h(
+          "button",
+          {
+            type: "button",
+            className: "btn btn-secondary gtv-mode-button" + (active ? " active" : ""),
+            "aria-label": texts.grouped,
+            onClick,
+          },
+          h(PluginApi.components.Icon, { icon: faLayerGroup })
+        )
       ),
       group
     );

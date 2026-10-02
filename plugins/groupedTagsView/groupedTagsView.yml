@@ -7,3 +7,16 @@ ui:
     - groupedTagsView.js
   css:
     - groupedTagsView.css
+settings:
+  categoryTag:
+    displayName: Category root tag
+    description: 'Name of the tag whose direct children are always shown as categories, even without tags of their own. Empty: "Kategorien" or "Categories".'
+    type: STRING
+  hideUncategorized:
+    displayName: Hide ungrouped tags
+    description: Do not show tags that have neither a parent nor children.
+    type: BOOLEAN
+  hideCounts:
+    displayName: Hide tag counts
+    description: Do not show the number of tags next to each category heading.
+    type: BOOLEAN

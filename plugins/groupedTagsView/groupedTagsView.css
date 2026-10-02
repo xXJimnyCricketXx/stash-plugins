@@ -40,7 +40,8 @@
 
 #grouped-tags-view .gtv-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  /* --gtv-card-width follows Stash's zoom slider (set inline by the script) */
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--gtv-card-width, 180px), 100%), 1fr));
   gap: 1rem;
 }
 
@@ -70,6 +71,27 @@
   object-fit: cover;
 }
 
+#grouped-tags-view .gtv-empty-category {
+  margin: 0;
+  opacity: 0.6;
+  font-style: italic;
+}
+
+#grouped-tags-view .gtv-root-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0 0 1.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(127, 127, 127, 0.4);
+  border-radius: 0.25rem;
+}
+
+#grouped-tags-view .gtv-root-hint span {
+  flex: 1 1 20rem;
+}
+
 /* Stash's default tag icon: show it whole and smaller instead of cropped. */
 #grouped-tags-view .gtv-default-image img {
   object-fit: contain;
@@ -90,7 +112,6 @@
   }
 
   #grouped-tags-view .gtv-grid {
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 0.5rem;
   }
 }
