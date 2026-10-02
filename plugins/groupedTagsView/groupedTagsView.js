@@ -105,9 +105,52 @@
     return { groups, parentGroupCount };
   }
 
-  const { React } = PluginApi;
+  const { React, ReactDOM } = PluginApi;
   const { Link } = PluginApi.libraries.ReactRouterDOM;
+  const { faLayerGroup } = PluginApi.libraries.FontAwesomeSolid;
   const h = React.createElement;
+
+  // --- View state shared by the toolbar button and the result area ---------
+
+  const STORAGE_KEY = "groupedTagsView.grouped";
+
+  function readGroupedPreference() {
+    try {
+      return localStorage.getItem(STORAGE_KEY) !== "false";
+    } catch (e) {
+      return true;
+    }
+  }
+
+  const viewState = {
+    grouped: readGroupedPreference(),
+    displayMode: null,
+    listeners: new Set(),
+    set(changes) {
+      Object.assign(this, changes);
+      if ("grouped" in changes) {
+        try {
+          localStorage.setItem(STORAGE_KEY, String(this.grouped));
+        } catch (e) {
+          // storage blocked: preference only lasts for this page load
+        }
+      }
+      this.listeners.forEach((listener) => listener());
+    },
+  };
+
+  function useViewState() {
+    const [, forceRender] = React.useReducer((n) => n + 1, 0);
+    React.useEffect(() => {
+      viewState.listeners.add(forceRender);
+      return () => viewState.listeners.delete(forceRender);
+    }, []);
+    return viewState;
+  }
+
+  function isGroupedActive(state) {
+    return state.grouped && state.displayMode === GRID_DISPLAY_MODE;
+  }
 
   function tagUrl(tag) {
     return `/tags/${tag.id}`;
@@ -198,17 +241,113 @@
     return h("div", { id: "grouped-tags-view" }, content);
   }
 
-  // TagList renders the result area of the tags page (/tags) below Stash's
-  // toolbar and sidebar. In grid mode it is replaced by the grouped view;
-  // list and tagger mode keep the original rendering.
-  // "instead" functions get (props, context, next), so next is the last argument.
+  // --- Toolbar button ------------------------------------------------------
+
+  // Stash's display mode buttons (ListViewButtonGroup) are not patchable.
+  // The group is the element right before the zoom slider container.
+  function findDisplayModeGroup() {
+    const zoom = document.querySelector(
+      ".tag-list .filtered-list-toolbar .zoom-slider-container"
+    );
+    const group = zoom && zoom.previousElementSibling;
+    return group && group.classList.contains("btn-group") ? group : null;
+  }
+
+  // Rendered into Stash's display mode button group via a portal.
+  // Grid stays the original gallery; this button switches to grid + grouped.
+  function GroupedModeButton() {
+    const state = useViewState();
+    const [group, setGroup] = React.useState(null);
+    const active = isGroupedActive(state);
+
+    React.useEffect(() => {
+      setGroup(findDisplayModeGroup());
+    });
+
+    const gridButton = group && group.querySelector(".btn:not(.gtv-mode-button)");
+
+    // Clicking Stash's own grid button means "original gallery".
+    React.useEffect(() => {
+      if (!gridButton) return undefined;
+      const onClick = (event) => {
+        if (!event.gtvInternal) viewState.set({ grouped: false });
+      };
+      gridButton.addEventListener("click", onClick);
+      return () => gridButton.removeEventListener("click", onClick);
+    }, [gridButton]);
+
+    // React marks the grid button active in grid mode; hand that over to
+    // this button while the grouped view is shown.
+    React.useEffect(() => {
+      if (!gridButton) return;
+      const gridMode = state.displayMode === GRID_DISPLAY_MODE;
+      gridButton.classList.toggle("active", gridMode && !active);
+    });
+
+    if (!group) return null;
+
+    const onClick = () => {
+      viewState.set({ grouped: true });
+      if (state.displayMode !== GRID_DISPLAY_MODE && gridButton) {
+        const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+        event.gtvInternal = true;
+        gridButton.dispatchEvent(event);
+      }
+    };
+
+    return ReactDOM.createPortal(
+      h(
+        "button",
+        {
+          type: "button",
+          className: "btn btn-secondary gtv-mode-button" + (active ? " active" : ""),
+          title: "Gruppiert",
+          onClick,
+        },
+        h(PluginApi.components.Icon, { icon: faLayerGroup })
+      ),
+      group
+    );
+  }
+
+  // FilteredTagList is the whole tags page (/tags) and is always rendered,
+  // also while the result is loading, so the button lives here.
+  // "after" functions get (props, context, result): result is the last argument.
+  PluginApi.patch.after("FilteredTagList", function (...args) {
+    const result = args[args.length - 1];
+    return h(React.Fragment, null, result, h(GroupedModeButton));
+  });
+
+  function DisplayModeSync({ displayMode }) {
+    React.useEffect(() => {
+      if (viewState.displayMode !== displayMode) viewState.set({ displayMode });
+    }, [displayMode]);
+    return null;
+  }
+
+  function GroupedOrOriginal({ displayMode, renderOriginal }) {
+    const state = useViewState();
+    const grouped = state.grouped && displayMode === GRID_DISPLAY_MODE;
+    return h(
+      React.Fragment,
+      null,
+      h(DisplayModeSync, { displayMode }),
+      grouped ? h(GroupedTagsView) : renderOriginal()
+    );
+  }
+
+  // TagList renders the result area of the tags page below Stash's toolbar
+  // and sidebar. In grid mode with "grouped" selected it shows the grouped
+  // view, otherwise the original rendering.
+  // "instead" functions get (props, context, next): next is the last argument.
   PluginApi.patch.instead("TagList", function (...args) {
     const next = args[args.length - 1];
+    const originalArgs = args.slice(0, -1);
     const props = args[0];
-    if (props.filter && props.filter.displayMode === GRID_DISPLAY_MODE) {
-      return h(GroupedTagsView);
-    }
-    return next(...args.slice(0, -1));
+    return h(GroupedOrOriginal, {
+      displayMode: props.filter ? props.filter.displayMode : null,
+      renderOriginal: () => next(...originalArgs),
+    });
   });
 
   console.log(LOG_PREFIX, "loaded");
